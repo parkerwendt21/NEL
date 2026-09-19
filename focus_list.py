@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from math import ceil
@@ -30,6 +31,7 @@ SCAN_COLUMNS = [
     "exchange",
     "industry",
     "close",
+    "high",
     "SMA30",
     "SMA50",
     "ADRP",
@@ -89,7 +91,8 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
     _require_columns(raw, ["name", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc"])
     df = raw.copy()
     numeric = ["close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc"]
-    for column in numeric:
+    optional_numeric = ["high"]
+    for column in numeric + [column for column in optional_numeric if column in df.columns]:
         df[column] = pd.to_numeric(df[column], errors="coerce")
 
     # ADRP and ATRP are TradingView's daily 14-period percentage indicators.
@@ -141,18 +144,61 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
     return universe.sort_values("momentum_score", ascending=False), leaders, nel
 
 
+def load_prior_session_highs(output_dir: Path, snapshot_date: date) -> tuple[dict[str, float], date | None]:
+    """Map ticker to its high from the most recent snapshot before today.
+
+    The scanner runs after the close, so the newest earlier `filtered_universe`
+    file holds the prior bar. Using the saved snapshot keeps the comparison
+    auditable and avoids a second data source with its own bar conventions.
+    """
+    candidates = []
+    for path in output_dir.glob("filtered_universe_*.csv"):
+        match = re.search(r"(\d{4}-\d{2}-\d{2})\.csv$", path.name)
+        if not match:
+            continue
+        stamp = date.fromisoformat(match.group(1))
+        if stamp < snapshot_date:
+            candidates.append((stamp, path))
+    if not candidates:
+        return {}, None
+    prior_date, prior_path = max(candidates)
+    frame = pd.read_csv(prior_path)
+    if not {"name", "high"}.issubset(frame.columns):
+        return {}, prior_date
+    highs = pd.to_numeric(frame["high"], errors="coerce")
+    lookup = {
+        str(name): float(high)
+        for name, high in zip(frame["name"].astype(str), highs)
+        if pd.notna(high) and high > 0
+    }
+    return lookup, prior_date
+
+
+def attach_prior_bar(nel: pd.DataFrame, prior_highs: dict[str, float]) -> pd.DataFrame:
+    """Flag leaders whose close sits inside the prior bar's high."""
+    frame = nel.copy()
+    if frame.empty:
+        frame["prior_high"] = pd.Series(dtype="float64")
+        frame["below_prior_high"] = pd.Series(dtype="bool")
+        return frame
+    frame["prior_high"] = frame["name"].astype(str).map(prior_highs)
+    # A missing prior high is unknown, not a setup, so NaN must resolve to False.
+    frame["below_prior_high"] = (frame["close"] < frame["prior_high"]).fillna(False)
+    return frame
+
+
 def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     """Order and round the columns so the daily review sheet is scan-friendly."""
     preferred = [
-        "name", "description", "exchange", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP",
+        "name", "description", "exchange", "industry", "close", "high", "prior_high", "SMA30", "SMA50", "ADRP", "ATRP",
         "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d", "average_dollar_volume_30d",
         "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank",
-        "momentum_score", "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m",
+        "momentum_score", "atr_extension_from_50d", "below_prior_high", "is_top_1m", "is_top_3m", "is_top_6m",
     ]
     columns = [column for column in preferred if column in frame.columns]
     result = frame.loc[:, columns].copy()
     return result.round({
-        "close": 2, "SMA30": 2, "SMA50": 2, "ADRP": 2, "ATRP": 2,
+        "close": 2, "high": 2, "prior_high": 2, "SMA30": 2, "SMA50": 2, "ADRP": 2, "ATRP": 2,
         "dollar_volume_30d": 0, "average_dollar_volume_30d": 0, "Perf.1M": 2, "Perf.3M": 2, "Perf.6M": 2,
         "momentum_score": 2, "atr_extension_from_50d": 2,
     })
@@ -165,16 +211,19 @@ def write_outputs(universe: pd.DataFrame, leaders: pd.DataFrame, nel: pd.DataFra
     export_dir.mkdir(exist_ok=True)
     stamp = (snapshot_date or datetime.now().date()).isoformat()
     settings_frame = pd.DataFrame(list(asdict(settings).items()), columns=["setting", "value"])
+    setups = nel.loc[nel["below_prior_high"]] if "below_prior_high" in nel.columns else nel.iloc[0:0]
     outputs = {
         "non_extended_leaders": prepare_for_export(nel),
         "nel_symbols": nel.loc[:, ["name"]].rename(columns={"name": "symbol"}),
+        "nel_setups": prepare_for_export(setups),
+        "setup_symbols": setups.loc[:, ["name"]].rename(columns={"name": "symbol"}),
         "momentum_leaders": prepare_for_export(leaders),
         "filtered_universe": prepare_for_export(universe),
         "settings": settings_frame,
     }
     paths = []
     for name, frame in outputs.items():
-        destination = export_dir if name == "nel_symbols" else output_dir
+        destination = export_dir if name.endswith("_symbols") else output_dir
         path = destination / f"{name}_{stamp}.csv"
         frame.to_csv(path, index=False)
         paths.append(path)
@@ -198,11 +247,21 @@ def main() -> None:
     if args.min_adr_pct < 0:
         raise SystemExit("--min-adr-pct cannot be negative.")
     settings = Settings(min_adr_pct=args.min_adr_pct, top_pct=args.top_pct, max_atr_extension=args.max_extension)
+    stamp = args.snapshot_date or datetime.now().date()
     raw = fetch_universe()
     universe, leaders, nel = calculate_nel(raw, settings)
-    paths = write_outputs(universe, leaders, nel, settings, args.output_dir, args.snapshot_date)
+    prior_highs, prior_date = load_prior_session_highs(args.output_dir, stamp)
+    nel = attach_prior_bar(nel, prior_highs)
+    setups = int(nel["below_prior_high"].sum())
+    paths = write_outputs(universe, leaders, nel, settings, args.output_dir, stamp)
     paths.append(write_dashboard(args.output_dir))
-    print(f"Scanned: {len(raw):,} | eligible: {len(universe):,} | leaders: {len(leaders):,} | NEL: {len(nel):,}")
+    print(f"Scanned: {len(raw):,} | eligible: {len(universe):,} | leaders: {len(leaders):,} | NEL: {len(nel):,} | setups: {setups:,}")
+    if prior_date is None:
+        print("No earlier snapshot found, so no prior-bar highs were available. Setups appear from the next run.")
+    elif not prior_highs:
+        print(f"The {prior_date} snapshot predates the `high` column, so no setups could be flagged.")
+    else:
+        print(f"Prior bar taken from the {prior_date} snapshot.")
     print("Saved:\n" + "\n".join(str(path) for path in paths))
 
 

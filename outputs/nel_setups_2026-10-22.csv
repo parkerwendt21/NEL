@@ -1,0 +1,12 @@
+name,description,exchange,industry,close,high,prior_high,SMA30,SMA50,ADRP,ATRP,average_volume_10d_calc,average_volume_30d_calc,dollar_volume_30d,average_dollar_volume_30d,Perf.1M,perf_1m_rank,Perf.3M,perf_3m_rank,Perf.6M,perf_6m_rank,momentum_score,atr_extension_from_50d,below_prior_high,is_top_1m,is_top_3m,is_top_6m
+GTLB,GitLab Inc.,NASDAQ,Packaged Software,55.45,56.2,55.73,50.71,48.1,4.88,4.61,4254371.8,3998253.466666667,221703155.0,202741438.0,12.29,53,74.81,14,165.69,7,84.27,3.32,True,False,True,True
+HTFL,"Heartflow, Inc.",NASDAQ,Packaged Software,55.82,57.25,56.3,49.9,48.36,5.65,5.15,1606840.7,1886830.3666666667,105322871.0,94146860.0,10.27,61,131.52,5,77.77,52,73.19,2.99,True,False,True,False
+CORT,Corcept Therapeutics Incorporated,NASDAQ,Pharmaceuticals: Major,116.28,118.42,117.14,115.55,115.8,4.06,4.15,584453.0,1377873.8333333333,160219169.0,159211944.0,5.43,81,27.82,68,153.28,9,62.18,0.1,True,False,False,True
+FIVN,"Five9, Inc.",NASDAQ,Packaged Software,35.29,35.75,36.0,34.42,33.79,6.02,6.02,1550923.8,2213305.6,78107555.0,76190094.0,6.94,75,51.92,34,125.93,17,61.59,0.74,True,False,False,True
+ATRC,"AtriCure, Inc.",NASDAQ,Medical Specialties,57.67,59.29,58.2,56.66,53.4,4.01,3.96,646836.7,1266906.2,73062481.0,71778471.0,-0.96,124,72.61,16,105.96,30,59.21,2.02,True,False,True,False
+QMCO,Quantum Corporation,NASDAQ,Computer Peripherals,17.62,19.23,20.02,26.63,25.33,15.31,15.14,1948586.6,1916863.0,33775126.0,51043186.0,-32.27,405,54.97,32,142.7,11,55.13,-2.01,True,False,False,True
+SNOW,Snowflake Inc.,NYSE,Packaged Software,322.73,327.48,323.77,335.02,332.27,4.99,5.03,5141234.9,4372130.733333333,1411017752.0,1464739579.0,-3.84,155,17.85,100,126.46,16,46.82,-0.57,True,False,False,True
+AMLX,"Amylyx Pharmaceuticals, Inc.",NASDAQ,Pharmaceuticals: Major,29.03,29.78,29.23,29.61,31.0,4.32,4.91,1407968.3,1443633.2,41908672.0,42744776.0,-10.81,237,69.07,17,67.32,59,41.86,-1.3,True,False,True,False
+SHOP,Shopify Inc.,NASDAQ,Miscellaneous Commercial Services,174.29,178.28,176.26,152.78,150.54,4.12,4.28,8788501.3,9578789.633333333,1669487245.0,1463441094.0,35.32,8,48.41,36,39.99,98,41.24,3.69,True,True,False,False
+DNA,"Ginkgo Bioworks Holdings, Inc.",NYSE,Medical/Nursing Services,10.01,10.1,10.38,10.25,8.97,16.23,12.52,2656983.600000001,3076177.6000000006,30792538.0,31530820.0,24.35,17,29.83,65,28.66,126,27.61,0.93,True,True,False,False
+STNE,StoneCo Ltd.,NASDAQ,Miscellaneous Commercial Services,11.55,12.04,12.1,10.51,10.2,4.84,4.64,5470097.2,6087712.233333333,70313076.0,64012294.0,20.5,23,3.87,148,-5.48,211,6.29,2.86,True,True,False,False
